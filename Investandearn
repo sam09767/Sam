@@ -1,0 +1,194 @@
+<!DOCTYPE html><html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invest and Earn</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f8f9fa;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    .container {
+      max-width: 500px;
+      margin: 30px auto;
+      padding: 20px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    input, button {
+      padding: 10px;
+      width: 80%;
+      margin: 10px 0;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    .admin-section {
+      display: none;
+      text-align: left;
+      margin-top: 20px;
+    }
+    .user-card {
+      padding: 10px;
+      border-bottom: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Invest and Earn</h2><div id="login-section">
+  <input type="text" id="phone" placeholder="Enter Phone Number">
+  <div id="recaptcha-container"></div>
+  <button onclick="sendOTP()">Send OTP</button>
+  <input type="text" id="otp" placeholder="Enter OTP">
+  <button onclick="verifyOTP()">Verify OTP</button>
+</div>
+
+<div id="main-section" style="display:none">
+  <h3>Wallet Balance: ₹<span id="wallet">0</span></h3>
+  <input type="text" id="upi" placeholder="Enter your UPI ID">
+  <button onclick="saveUpi()">Save UPI</button>
+  <br>
+  <select id="plan">
+    <option value="100">Invest ₹100</option>
+    <option value="200">Invest ₹200</option>
+    <option value="500">Invest ₹500</option>
+    <option value="1000">Invest ₹1000</option>
+  </select>
+  <button onclick="invest()">Invest</button>
+  <br>
+  <button onclick="requestWithdraw()">Request Withdrawal</button>
+</div>
+
+<div id="admin-login">
+  <input type="password" id="admin-pass" placeholder="Developer Password">
+  <button onclick="checkAdmin()">Access Developer Panel</button>
+</div>
+
+<div class="admin-section" id="admin-panel">
+  <h3>All User Wallets</h3>
+  <div id="user-list"></div>
+
+  <h3>Withdrawal Requests</h3>
+  <div id="withdraw-list"></div>
+</div>
+
+  </div>  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBliYgAYzLW-yUx8_OtBBWooha3Az9Zy4I",
+      authDomain: "investment-4b5e5.firebaseapp.com",
+      databaseURL: "https://investment-4b5e5-default-rtdb.firebaseio.com",
+      projectId: "investment-4b5e5",
+      storageBucket: "investment-4b5e5.appspot.com",
+      messagingSenderId: "300054327485",
+      appId: "1:300054327485:web:63dabf37f767678a6847d4",
+      measurementId: "G-30XD0R8SKG"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    window.onload = function() {
+      window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container');
+    }
+
+    let currentUser = "";
+
+    function sendOTP() {
+      const phone = document.getElementById('phone').value;
+      const formatted = phone.startsWith('+91') ? phone : '+91' + phone;
+      auth.signInWithPhoneNumber(formatted, window.recaptchaVerifier)
+        .then(confirmationResult => {
+          window.confirmationResult = confirmationResult;
+          alert("OTP sent");
+        }).catch(e => alert(e.message));
+    }
+
+    function verifyOTP() {
+      const code = document.getElementById('otp').value;
+      window.confirmationResult.confirm(code).then(result => {
+        const user = result.user;
+        currentUser = user.phoneNumber.replace('+91','');
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('main-section').style.display = 'block';
+        loadWallet();
+      }).catch(e => alert("Invalid OTP"));
+    }
+
+    function loadWallet() {
+      db.ref('users/' + currentUser).once('value', snap => {
+        let data = snap.val() || { wallet: 0, upi: "" };
+        document.getElementById('wallet').innerText = data.wallet;
+        document.getElementById('upi').value = data.upi || "";
+      });
+    }
+
+    function saveUpi() {
+      const upi = document.getElementById('upi').value;
+      db.ref('users/' + currentUser + '/upi').set(upi);
+      alert("UPI ID saved");
+    }
+
+    function invest() {
+      const amount = parseInt(document.getElementById('plan').value);
+      const today = new Date().toISOString();
+      db.ref('users/' + currentUser).once('value', snap => {
+        let data = snap.val() || { wallet: 0 };
+        db.ref('users/' + currentUser).update({
+          investment: amount,
+          invested_on: today,
+          wallet: data.wallet,
+          earn_days: 0
+        });
+        alert("Investment successful");
+      });
+    }
+
+    function requestWithdraw() {
+      const upi = document.getElementById('upi').value;
+      if (!upi) return alert("Please enter UPI ID first");
+      db.ref('withdrawals/' + currentUser).set({
+        phone: currentUser,
+        upi: upi,
+        requested_at: new Date().toLocaleString()
+      });
+      alert("Withdrawal requested");
+    }
+
+    function checkAdmin() {
+      const pass = document.getElementById('admin-pass').value;
+      if (pass === 'Rayyan@1813') {
+        document.getElementById('admin-panel').style.display = 'block';
+        loadAdminPanel();
+      } else {
+        alert("Wrong password");
+      }
+    }
+
+    function loadAdminPanel() {
+      db.ref('users').once('value', snap => {
+        let html = '';
+        snap.forEach(child => {
+          let d = child.val();
+          html += `<div class='user-card'>📱 ${child.key} | 💰 ₹${d.wallet || 0} | 🏦 ${d.upi || 'N/A'} | Invested: ₹${d.investment || 0}</div>`;
+        });
+        document.getElementById('user-list').innerHTML = html;
+      });
+
+      db.ref('withdrawals').once('value', snap => {
+        let html = '';
+        snap.forEach(child => {
+          let d = child.val();
+          html += `<div class='user-card'>📱 ${d.phone} | 🏦 ${d.upi} | ⏰ ${d.requested_at}</div>`;
+        });
+        document.getElementById('withdraw-list').innerHTML = html;
+      });
+    }
+  </script></body>
+</html>
