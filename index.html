@@ -1,0 +1,355 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rayyan Property Invest</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      margin: 0;
+      background: linear-gradient(135deg, #e0eafc, #cfdef3);
+      animation: fadeIn 1s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+      background: white;
+      margin-top: 30px;
+      border-radius: 15px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      animation: slideUp 1s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    h2, h3, h4 { text-align: center; }
+    input, button, select {
+      padding: 12px;
+      margin: 10px 0;
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .property-plan {
+      background: #f7f7f7;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .hidden { display: none; }
+    .dev-icon {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      font-size: 22px;
+      cursor: pointer;
+    }
+    .wallet { background: #e0ffe0; padding: 10px; border-radius: 8px; text-align: center; }
+    .session-item {
+      background: #f0f8ff;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 8px;
+      border-left: 4px solid #007bff;
+    }
+  </style>
+</head>
+<body>
+<div class="container" id="auth">
+  <h2>Sign In / Sign Up</h2>
+  <input type="text" id="username" placeholder="Username" />
+  <input type="password" id="password" placeholder="Password" />
+  <button onclick="signup()">Sign Up</button>
+  <button onclick="login()">Log In</button>
+</div>
+<div class="container hidden" id="dashboard">
+  <h2>Welcome, <span id="userName"></span></h2>
+  <div class="wallet">
+    Wallet Balance: ₹<span id="walletBalance">0</span>
+  </div>
+  <div class="section">
+    <h3>Available Property Investments</h3>
+    <div id="propertyList"></div>
+  </div>
+  <button onclick="showAddMoney()">Add Money</button>
+  <div id="addMoney" class="hidden">
+    <a href="upi://pay?pa=ishaquehaque107@okhdfcbank&pn=Rayyan%20Waseem" target="_blank">
+      <button>Tap to Pay via UPI</button>
+    </a>
+  </div>
+  <button onclick="requestWithdrawal()">Request Withdrawal</button>
+  <button onclick="logout()">Logout</button>
+</div>
+<div class="dev-icon" onclick="openAdmin()">🛠️</div>
+<div class="container hidden" id="admin">
+  <h2>Developer Panel</h2>
+  <div id="adminLogin">
+    <input type="password" id="adminPass" placeholder="Enter Developer Password" />
+    <button onclick="checkAdminPassword()">Enter</button>
+  </div>
+  <div class="hidden" id="adminPanel">
+    <h3>Active Sessions (All Devices)</h3>
+    <div id="activeSessions"></div>
+    <h3>All Users</h3>
+    <div id="userList"></div>
+    <h3>Withdrawal Requests</h3>
+    <div id="withdrawList"></div>
+  </div>
+</div>
+<script>
+let currentUser = null;
+const investments = [
+  { amount: 100, reward: 20, days: 10 },
+  { amount: 200, reward: 40, days: 10 },
+  { amount: 300, reward: 60, days: 10 },
+  { amount: 400, reward: 80, days: 10 },
+  { amount: 500, reward: 100, days: 10 },
+  { amount: 600, reward: 120, days: 10 },
+  { amount: 700, reward: 140, days: 10 },
+  { amount: 800, reward: 160, days: 10 },
+  { amount: 900, reward: 180, days: 10 },
+  { amount: 999, reward: 200, days: 10 },
+];
+
+let activeSessions = {};
+
+function updateActiveSessions() {
+  const now = Date.now();
+  for (const username in activeSessions) {
+    if (now - activeSessions[username] > 300000) {
+      delete activeSessions[username];
+    }
+  }
+  renderActiveSessions();
+}
+
+function renderActiveSessions() {
+  const sessionsList = document.getElementById('activeSessions');
+  sessionsList.innerHTML = '';
+  if (Object.keys(activeSessions).length === 0) {
+    sessionsList.innerHTML = '<p>No active sessions</p>';
+    return;
+  }
+  const now = Date.now();
+  for (const username in activeSessions) {
+    const minutesAgo = Math.floor((now - activeSessions[username]) / 60000);
+    const sessionItem = document.createElement('div');
+    sessionItem.className = 'session-item';
+    sessionItem.innerHTML = `
+      <b>${username}</b> - Active ${minutesAgo} minute${minutesAgo !== 1 ? 's' : ''} ago
+      <button onclick="forceLogout('${username}')" style="float:right; padding:5px; font-size:12px;">Force Logout</button>
+    `;
+    sessionsList.appendChild(sessionItem);
+  }
+}
+
+function signup() {
+  const u = username.value.trim();
+  const p = password.value.trim();
+  if (!u || !p) return alert('Fill all fields');
+  if (localStorage.getItem(`user_${u}`)) return alert('User exists');
+  localStorage.setItem(`user_${u}`, JSON.stringify({ 
+    password: p, 
+    wallet: 0, 
+    earnings: [], 
+    withdraws: [],
+    lastActive: null
+  }));
+  alert('Account created. Please log in.');
+}
+
+function login() {
+  const u = username.value.trim();
+  const p = password.value.trim();
+  const data = localStorage.getItem(`user_${u}`);
+  if (!data) return alert('No such user');
+  const user = JSON.parse(data);
+  if (user.password !== p) return alert('Wrong password');
+  currentUser = u;
+  user.lastActive = Date.now();
+  localStorage.setItem(`user_${u}`, JSON.stringify(user));
+  activeSessions[u] = user.lastActive;
+  if (!adminPanel.classList.contains('hidden')) {
+    updateActiveSessions();
+  }
+  showDashboard();
+  if (!window.sessionHeartbeat) {
+    window.sessionHeartbeat = setInterval(() => {
+      if (currentUser) {
+        const user = JSON.parse(localStorage.getItem(`user_${currentUser}`));
+        user.lastActive = Date.now();
+        localStorage.setItem(`user_${currentUser}`, JSON.stringify(user));
+        activeSessions[currentUser] = user.lastActive;
+      }
+    }, 60000);
+  }
+}
+
+function logout() {
+  if (currentUser) {
+    delete activeSessions[currentUser];
+    if (!adminPanel.classList.contains('hidden')) {
+      updateActiveSessions();
+    }
+  }
+  currentUser = null;
+  auth.classList.remove('hidden');
+  dashboard.classList.add('hidden');
+}
+
+function forceLogout(username) {
+  delete activeSessions[username];
+  updateActiveSessions();
+  alert(`User ${username} has been logged out from all devices`);
+}
+
+function showDashboard() {
+  auth.classList.add('hidden');
+  dashboard.classList.remove('hidden');
+  userName.textContent = currentUser;
+  updateWallet();
+  renderProperties();
+}
+
+function updateWallet() {
+  const u = JSON.parse(localStorage.getItem(`user_${currentUser}`));
+  walletBalance.textContent = u.wallet;
+}
+
+function renderProperties() {
+  let html = '';
+  investments.forEach((plan, i) => {
+    html += `<div class='property-plan'>
+      <b>Invest ₹${plan.amount}</b><br>Earn ₹${plan.reward} daily for ${plan.days} days
+      <button onclick='buyProperty(${i})'>Invest Now</button>
+    </div>`;
+  });
+  document.getElementById('propertyList').innerHTML = html;
+}
+
+function buyProperty(index) {
+  let plan = investments[index];
+  let user = JSON.parse(localStorage.getItem(`user_${currentUser}`));
+  if (user.wallet < plan.amount) return alert('Insufficient balance');
+  user.wallet -= plan.amount;
+  user.earnings.push({ reward: plan.reward, daysLeft: plan.days });
+  localStorage.setItem(`user_${currentUser}`, JSON.stringify(user));
+  updateWallet();
+  simulateEarnings();
+  alert('Investment started!');
+}
+
+function simulateEarnings() {
+  setInterval(() => {
+    if (!currentUser) return;
+    let user = JSON.parse(localStorage.getItem(`user_${currentUser}`));
+    user.earnings.forEach(e => {
+      if (e.daysLeft > 0) {
+        e.daysLeft--;
+        user.wallet += e.reward;
+      }
+    });
+    localStorage.setItem(`user_${currentUser}`, JSON.stringify(user));
+    updateWallet();
+  }, 10000);
+}
+
+function showAddMoney() {
+  addMoney.classList.toggle('hidden');
+}
+
+function requestWithdrawal() {
+  let amt = prompt('Enter amount to withdraw:');
+  amt = parseInt(amt);
+  if (!amt || amt <= 0) return;
+  const user = JSON.parse(localStorage.getItem(`user_${currentUser}`));
+  if (user.wallet < amt) return alert('Insufficient balance');
+  user.withdraws.push(amt);
+  user.wallet -= amt;
+  localStorage.setItem(`user_${currentUser}`, JSON.stringify(user));
+  updateWallet();
+  alert('Withdrawal requested.');
+}
+
+function openAdmin() {
+  document.getElementById('admin').classList.remove('hidden');
+  activeSessions = {};
+  for (let key in localStorage) {
+    if (key.startsWith('user_')) {
+      const user = JSON.parse(localStorage.getItem(key));
+      if (user.lastActive && (Date.now() - user.lastActive) < 300000) {
+        activeSessions[key.replace('user_', '')] = user.lastActive;
+      }
+    }
+  }
+  updateActiveSessions();
+}
+
+function checkAdminPassword() {
+  if (adminPass.value === 'Rayyan@1813') {
+    adminLogin.classList.add('hidden');
+    adminPanel.classList.remove('hidden');
+    loadAdminData();
+    setInterval(updateActiveSessions, 30000);
+  } else {
+    alert('Wrong password');
+  }
+}
+
+function loadAdminData() {
+  userList.innerHTML = '';
+  withdrawList.innerHTML = '';
+  for (let key in localStorage) {
+    if (key.startsWith('user_')) {
+      const u = JSON.parse(localStorage.getItem(key));
+      const name = key.replace('user_', '');
+      userList.innerHTML += `<div><b>${name}</b> - Wallet ₹${u.wallet} <input type='number' id='top_${name}' placeholder='₹' style='width:60px'/> <button onclick='addFunds("${name}")'>Add</button></div>`;
+      u.withdraws.forEach(w => {
+        withdrawList.innerHTML += `<div><b>${name}</b> requested ₹${w}</div>`;
+      });
+    }
+  }
+}
+
+function addFunds(username) {
+  const amt = parseInt(document.getElementById(`top_${username}`).value);
+  if (!amt) return alert('Invalid amount');
+  const u = JSON.parse(localStorage.getItem(`user_${username}`));
+  u.wallet += amt;
+  localStorage.setItem(`user_${username}`, JSON.stringify(u));
+  loadAdminData();
+  if (username === currentUser) updateWallet();
+}
+
+window.onload = function() {
+  for (let key in localStorage) {
+    if (key.startsWith('user_')) {
+      const user = JSON.parse(localStorage.getItem(key));
+      if (user.lastActive && (Date.now() - user.lastActive) < 300000) {
+        activeSessions[key.replace('user_', '')] = user.lastActive;
+      }
+    }
+  }
+};
+</script>
+</body>
+</html>
